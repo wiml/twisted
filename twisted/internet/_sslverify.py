@@ -8,7 +8,6 @@ from __future__ import division, absolute_import
 import itertools
 import warnings
 
-from binascii import a2b_base64
 from hashlib import md5
 
 import OpenSSL
@@ -209,7 +208,8 @@ from zope.interface import Interface, implementer
 from twisted.internet.defer import Deferred
 from twisted.internet.error import VerifyError, CertificateError
 from twisted.internet.interfaces import (
-    IAcceptableCiphers, ICipher, IOpenSSLClientConnectionCreator
+    IAcceptableCiphers, ICipher, IOpenSSLClientConnectionCreator,
+    IOpenSSLContextFactory
 )
 
 from twisted.python import reflect, util
@@ -449,7 +449,7 @@ class CertBase:
         Convert this L{CertBase} into a provider of the given interface.
 
         @param interface: The interface to conform to.
-        @type interface: L{zope.interface.interface.InterfaceClass}
+        @type interface: L{zope.interface.interfaces.IInterface}
 
         @return: an L{IOpenSSLTrustRoot} provider or L{NotImplemented}
         @rtype: C{interface} or L{NotImplemented}
@@ -816,20 +816,11 @@ class PublicKey:
         involving certificate requests for computing the hash that was not
         stable in the face of changes to the underlying OpenSSL library.
 
-        The technique currently being used - using Netscape SPKI APIs in
-        OpenSSL - is still somewhat dubious, but due to limitations in both
-        pyOpenSSL and OpenSSL APIs, it is not currently possible to compute a
-        reliable hash of the public key in isolation (i.e. not paired with a
-        specific certificate).
-
         @return: Return a 32-character hexadecimal string uniquely identifying
             this public key, I{for this version of Twisted}.
         @rtype: native L{str}
         """
-        nsspki = crypto.NetscapeSPKI()
-        nsspki.set_pubkey(self.original)
-        encoded = nsspki.b64_encode()
-        raw = a2b_base64(encoded)
+        raw = crypto.dump_publickey(crypto.FILETYPE_ASN1, self.original)
         h = md5()
         h.update(raw)
         return h.hexdigest()
@@ -1292,7 +1283,7 @@ def optionsForClientTLS(hostname, trustRoot=None, clientCertificate=None,
     @type clientCertificate: L{PrivateCertificate}
 
     @param acceptableProtocols: The protocols this peer is willing to speak
-        after the TLS negotation has completed, advertised over both ALPN and
+        after the TLS negotiation has completed, advertised over both ALPN and
         NPN. If this argument is specified, and no overlap can be found with
         the other peer, the connection will fail to be established. If the
         remote peer does not offer NPN or ALPN, the connection will be
@@ -1343,6 +1334,7 @@ def optionsForClientTLS(hostname, trustRoot=None, clientCertificate=None,
 
 
 
+@implementer(IOpenSSLContextFactory)
 class OpenSSLCertificateOptions(object):
     """
     A L{CertificateOptions <twisted.internet.ssl.CertificateOptions>} specifies
@@ -1484,7 +1476,7 @@ class OpenSSLCertificateOptions(object):
         @type trustRoot: L{IOpenSSLTrustRoot}
 
         @param acceptableProtocols: The protocols this peer is willing to speak
-            after the TLS negotation has completed, advertised over both ALPN
+            after the TLS negotiation has completed, advertised over both ALPN
             and NPN. If this argument is specified, and no overlap can be found
             with the other peer, the connection will fail to be established.
             If the remote peer does not offer NPN or ALPN, the connection will
@@ -1737,7 +1729,7 @@ class _OpenSSLECCurve(FancyEqMixin, object):
 
     def addECKeyToContext(self, context):
         """
-        Add an temporary EC key to C{context}.
+        Add a temporary EC key to C{context}.
 
         @param context: The context to add a key to.
         @type context: L{OpenSSL.SSL.Context}
@@ -1896,7 +1888,7 @@ class OpenSSLDiffieHellmanParameters(object):
             exchange.
         @type filePath: L{FilePath <twisted.python.filepath.FilePath>}
 
-        @return: A instance that loads its parameters from C{filePath}.
+        @return: An instance that loads its parameters from C{filePath}.
         @rtype: L{DiffieHellmanParameters
             <twisted.internet.ssl.DiffieHellmanParameters>}
         """
@@ -1912,7 +1904,7 @@ def _setAcceptableProtocols(context, acceptableProtocols):
     @type context: L{OpenSSL.SSL.Context}
 
     @param acceptableProtocols: The protocols this peer is willing to speak
-        after the TLS negotation has completed, advertised over both ALPN and
+        after the TLS negotiation has completed, advertised over both ALPN and
         NPN. If this argument is specified, and no overlap can be found with
         the other peer, the connection will fail to be established. If the
         remote peer does not offer NPN or ALPN, the connection will be

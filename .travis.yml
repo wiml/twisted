@@ -1,15 +1,52 @@
+#
+# This is the Travis-CI configuration.
+#
+# The actual dependency installation and test execution is done via tox as a
+# way to share the same process between Travis-CI and Buildbot.
+#
 language: python
 sudo: false
 
-python:
-  - "2.7"
-  - "3.3"
-  - "3.4"
-  - "3.5"
-  - "pypy"
+env:
+  global:
+    - TRIAL_REPORTER=text
 
 matrix:
+  include:
+    - python: 2.7
+      env: TOXENV=py27-coverage-posix,codecov-publish
+    # FIXME: https://twistedmatrix.com/trac/ticket/8633
+    # Coverage should also be reported for nomodules tests so that we also
+    # get report for those conditional branches.
+    - python: 2.7
+      env: TOXENV=py27-nomodules-posix
+    - python: 3.3
+      env: TOXENV=py33-coverage-posix,codecov-publish
+    - python: 3.4
+      env: TOXENV=py34-coverage-posix,codecov-publish
+    - python: 3.5
+      env: TOXENV=py35-coverage-posix,codecov-publish
+    - python: pypy
+      env: TOXENV=pypy-coverage-posix,codecov-publish
+    # For now all non-trial tests are in a single job to reduce the time spent
+    # on starting separate jobs.
+    - python: 2.7
+      env: TOXENV=narrativedocs,apidocs,pyflakes,topfile,manifest-checker
+    #
+    # OSX 10.10
+    #
+    - language: generic
+      os: osx
+      # 7.1 is OS X 10.10.x
+      # see: https://docs.travis-ci.com/user/languages/objective-c/#Supported-OS-X-iOS-SDK-versions
+      osx_image: xcode7.1
+      python: 2.7
+      env: TOXENV=py27-coverage-posix,codecov-publish
+
   allow_failures:
+    # For now, OSX run on Travis-CI has a few failures.
+    - os: osx
+    # PYPY is not yet a supported platform
     - python: pypy
 
 addons:
@@ -22,30 +59,8 @@ cache:
   directories:
     - $HOME/.cache/pip
 
-env:
-  global:
-    - TRIAL_REPORTER=text
-
-# Travis-CI has an old version of PyPy so we install a newer version on the
-# fly.
-# Source: https://github.com/saghul/pycares/blob/master/.travis.yml
 install:
-  - |
-      if [ "$TRAVIS_PYTHON_VERSION" = "pypy" ]; then
-        export PYENV_ROOT="$HOME/.pyenv"
-        if [ -f "$PYENV_ROOT/bin/pyenv" ]; then
-          pushd "$PYENV_ROOT" && git pull && popd
-        else
-          rm -rf "$PYENV_ROOT" && git clone --depth 1 https://github.com/yyuu/pyenv.git "$PYENV_ROOT"
-        fi
-        export PYPY_VERSION="5.3"
-        "$PYENV_ROOT/bin/pyenv" install --skip-existing "pypy-$PYPY_VERSION"
-        virtualenv --python="$PYENV_ROOT/versions/pypy-$PYPY_VERSION/bin/python" "$HOME/virtualenvs/pypy-$PYPY_VERSION"
-        source "$HOME/virtualenvs/pypy-$PYPY_VERSION/bin/activate"
-        echo "import sys; sys.setrecursionlimit(10000)" > $HOME/virtualenvs/pypy-$PYPY_VERSION/lib-python/2.7/sitecustomize.py
-      fi
-  - pip install tox tox-travis
-
+  - ./.travis/install.sh tox
 
 # FIXME: https://twistedmatrix.com/trac/ticket/8373
 # By default, Travis only clones one branch.
@@ -55,5 +70,6 @@ before_script:
   - git remote set-branches --add origin trunk
   - git fetch origin trunk
 
+# Run tox from the created virtualenv.
 script:
-  - tox
+  - ./.travis/run.sh

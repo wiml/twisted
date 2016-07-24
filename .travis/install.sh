@@ -2,6 +2,9 @@
 #
 # Helper for setting up the test environment on Travis.
 #
+# If running the tests requires a virtualenv, create it at `~/.venv` as the
+# test run step will activate the virtualenv from that location.
+#
 set -e
 set -x
 
@@ -35,8 +38,6 @@ elif [ "$TRAVIS_PYTHON_VERSION" = "pypy" ]; then
     # Until PYPY coverage fix is released we using pypy-dev which requires
     # Python 2.7.
     # https://bitbucket.org/pypy/pypy/issues/2335
-    "$PYENV_ROOT/bin/pyenv" uninstall -f "2.7"
-    "$PYENV_ROOT/bin/pyenv" uninstall -f "pypy-dev"
     "$PYENV_ROOT/bin/pyenv" install "$PYPY_VERSION"
     virtualenv --python="$PYENV_ROOT/versions/$PYPY_VERSION/bin/python" ~/.venv
     source ~/.venv/bin/activate

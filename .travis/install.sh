@@ -6,7 +6,7 @@ set -e
 set -x
 
 # Version used to run the PYPY tests as defined by pyenv.
-export PYPY_VERSION="dev"
+export PYPY_VERSION="pypy-5.3.1"
 
 
 if [[ "$(uname -s)" == 'Darwin' ]]; then
@@ -35,9 +35,10 @@ elif [ "$TRAVIS_PYTHON_VERSION" = "pypy" ]; then
     # Until PYPY coverage fix is released we using pypy-dev which requires
     # Python 2.7.
     # https://bitbucket.org/pypy/pypy/issues/2335
-    "$PYENV_ROOT/bin/pyenv" install --skip-existing "2.7"
-    "$PYENV_ROOT/bin/pyenv" install --skip-existing "pypy-$PYPY_VERSION"
-    virtualenv --python="$PYENV_ROOT/versions/pypy-$PYPY_VERSION/bin/python" ~/.venv
+    "$PYENV_ROOT/bin/pyenv" uninstall -f "2.7"
+    "$PYENV_ROOT/bin/pyenv" uninstall -f "pypy-dev"
+    "$PYENV_ROOT/bin/pyenv" install "$PYPY_VERSION"
+    virtualenv --python="$PYENV_ROOT/versions/$PYPY_VERSION/bin/python" ~/.venv
     source ~/.venv/bin/activate
 fi
 

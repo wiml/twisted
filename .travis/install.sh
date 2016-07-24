@@ -35,11 +35,14 @@ elif [ "$TRAVIS_PYTHON_VERSION" = "pypy" ]; then
         git clone --depth 1 https://github.com/yyuu/pyenv.git "$PYENV_ROOT"
     fi
 
-    # Until PYPY coverage fix is released we using pypy-dev which requires
-    # Python 2.7.
-    # https://bitbucket.org/pypy/pypy/issues/2335
     "$PYENV_ROOT/bin/pyenv" install --skip-existing "$PYPY_VERSION"
     virtualenv --python="$PYENV_ROOT/versions/$PYPY_VERSION/bin/python" ~/.venv
+
+    # Workaround for coverate reporting.
+    # Should be removed once pypy bug is released
+    # https://bitbucket.org/pypy/pypy/issues/2335.
+    echo "import sys; sys.setrecursionlimit(100000)" > ~.venv/lib-python/2.7/sitecustomize.py
+
     source ~/.venv/bin/activate
 fi
 

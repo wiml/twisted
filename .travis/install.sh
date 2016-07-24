@@ -38,7 +38,7 @@ elif [ "$TRAVIS_PYTHON_VERSION" = "pypy" ]; then
     # Until PYPY coverage fix is released we using pypy-dev which requires
     # Python 2.7.
     # https://bitbucket.org/pypy/pypy/issues/2335
-    "$PYENV_ROOT/bin/pyenv" install "$PYPY_VERSION"
+    "$PYENV_ROOT/bin/pyenv" install --skip-existing "$PYPY_VERSION"
     virtualenv --python="$PYENV_ROOT/versions/$PYPY_VERSION/bin/python" ~/.venv
     source ~/.venv/bin/activate
 fi

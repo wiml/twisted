@@ -58,6 +58,7 @@ addons:
 cache:
   directories:
     - $HOME/.cache/pip
+    - $HOME/.pyenv
 
 install:
   - ./.travis/install.sh tox

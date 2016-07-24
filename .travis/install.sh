@@ -21,8 +21,21 @@ elif [ "$TRAVIS_PYTHON_VERSION" = "pypy" ]; then
     # PYPY are executed in a virtualenv created using a PYPY version obtained
     # using pyenv.
     export PYENV_ROOT="$HOME/.pyenv"
-    rm -rf "$PYENV_ROOT"
-    git clone --depth 1 https://github.com/yyuu/pyenv.git "$PYENV_ROOT"
+
+    if [ -f "$PYENV_ROOT/bin/pyenv" ]; then
+        # pyenv already exists. Just updated it.
+        pushd "$PYENV_ROOT"
+        git pull
+        popd
+    else
+        rm -rf "$PYENV_ROOT"
+        git clone --depth 1 https://github.com/yyuu/pyenv.git "$PYENV_ROOT"
+    fi
+
+    # Until PYPY coverage fix is released we using pypy-dev which requires
+    # Python 2.7.
+    # https://bitbucket.org/pypy/pypy/issues/2335
+    "$PYENV_ROOT/bin/pyenv" install --skip-existing "2.7"
     "$PYENV_ROOT/bin/pyenv" install --skip-existing "pypy-$PYPY_VERSION"
     virtualenv --python="$PYENV_ROOT/versions/pypy-$PYPY_VERSION/bin/python" ~/.venv
     source ~/.venv/bin/activate

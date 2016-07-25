@@ -41,7 +41,7 @@ elif [ "$TRAVIS_PYTHON_VERSION" = "pypy" ]; then
     # Workaround for coverate reporting.
     # Should be removed once pypy bug is released
     # https://bitbucket.org/pypy/pypy/issues/2335.
-    echo "import sys; sys.setrecursionlimit(100000)" > ~.venv/lib-python/2.7/sitecustomize.py
+    echo "import sys; sys.setrecursionlimit(100000)" > ~/.venv/lib-python/2.7/sitecustomize.py
 
     source ~/.venv/bin/activate
 fi

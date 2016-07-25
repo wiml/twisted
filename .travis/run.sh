@@ -2,8 +2,10 @@
 set -e
 set -x
 
+#
+# Initialize the virtualenv if one was created at install time.
+#
 if [ -f ~/.venv/bin/activate ]; then
-    # Initialize the virtualenv created at install time.
     source ~/.venv/bin/activate
 fi
 

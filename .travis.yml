@@ -10,6 +10,22 @@ sudo: false
 env:
   global:
     - TRIAL_REPORTER=text
+    # Version used to run the PYPY tests as defined by pyenv.
+    - PYPY_VERSION=pypy-5.3.1
+    # Some python versions (like PYPY) are installed using pyenv and we cache
+    # the compiled version.
+    - PYENV_ROOT="$HOME/.pyenv"
+
+addons:
+  apt:
+    packages:
+    - libssl-dev
+    - libssl1.0.0
+
+cache:
+  directories:
+    - $HOME/.cache/pip
+    - $HOME/.pyenv
 
 matrix:
   include:
@@ -48,17 +64,6 @@ matrix:
     - os: osx
     # PYPY is not yet a supported platform
     - python: pypy
-
-addons:
-  apt:
-    packages:
-    - libssl-dev
-    - libssl1.0.0
-
-cache:
-  directories:
-    - $HOME/.cache/pip
-    - $HOME/.pyenv
 
 install:
   - ./.travis/install.sh tox

@@ -45,6 +45,25 @@ if platform.python_implementation() == 'PyPy':
 else:
     _PYPY = False
 
+def _shouldEnableNewStyle():
+    """
+    Returns whether or not we should enable the new-style conversion of
+    old-style classes. It inspects the environment for C{TWISTED_NEWSTYLE},
+    accepting an empty string, C{no}, C{false}, C{False}, and C{0} as falsey
+    values and everything else as a truthy value.
+
+    @rtype: L{bool}
+    """
+    value = os.environ.get('TWISTED_NEWSTYLE', '')
+
+    if value in ['', 'no', 'false', 'False', '0']:
+        return False
+    else:
+        return True
+
+
+_EXPECT_NEWSTYLE = _PY3 or _shouldEnableNewStyle()
+
 
 def currentframe(n=0):
     """
@@ -739,8 +758,33 @@ def _coercedUnicode(s):
 
 if _PY3:
     unichr = chr
+    raw_input = input
 else:
     unichr = unichr
+    raw_input = raw_input
+
+
+
+def _bytesRepr(bytestring):
+    """
+    Provide a repr for a byte string that begins with 'b' on both
+    Python 2 and 3.
+
+    @param bytestring: The string to repr.
+    @type bytestring: L{bytes}
+
+    @raise TypeError: The input is not L{bytes}.
+
+    @return: The repr with a leading 'b'.
+    @rtype: L{bytes}
+    """
+    if not isinstance(bytestring, bytes):
+        raise TypeError("Expected bytes not %r" % (bytestring,))
+
+    if _PY3:
+        return repr(bytestring)
+    else:
+        return 'b' + repr(bytestring)
 
 
 
@@ -778,6 +822,8 @@ __all__ = [
     "_b64decodebytes",
     "_bytesChr",
     "_coercedUnicode",
+    "_bytesRepr",
     "intern",
     "unichr",
+    "raw_input",
 ]

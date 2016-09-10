@@ -43,6 +43,11 @@ if [ -f ~/.venv/bin/activate ]; then
     source ~/.venv/bin/activate
 fi
 
+# Temporary workaround for https://github.com/pypa/setuptools/issues/776;
+# install (and thereby cache a built wheel of) cryptography.
+pip install -U pip 'setuptools<26'
+pip install cryptography
+
 #
 # Do the actual install work.
 #

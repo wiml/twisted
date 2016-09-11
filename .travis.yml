@@ -25,16 +25,21 @@ env:
     # the compiled version.
     - PYENV_ROOT="$HOME/.pyenv"
 
+
 addons:
   apt:
     packages:
     - libssl-dev
     - libssl1.0.0
 
+
 cache:
   directories:
     - $HOME/.cache/pip
-    - $HOME/.pyenv
+    - $PYENV_ROOT
+  before_cache:
+    - rm -f $HOME/.cache/pip/log/debug.log
+
 
 matrix:
   include:
@@ -82,7 +87,6 @@ matrix:
     # twistedchecker job was introduce as an experimental job.
     # Once it is stable we can enforce it
     - env: TOXENV=txchecker-travis
-
 
 
 install:

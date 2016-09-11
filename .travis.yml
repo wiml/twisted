@@ -21,6 +21,8 @@ env:
     - TRIAL_REPORTER=text
     # Version used to run the PYPY tests as defined by pyenv.
     - PYPY_VERSION=pypy-5.4.1
+    # Version which should be removed from the cache.
+    - PREVIOUS_PYPY_VERSION=pypy=5.3.1
     # Some python versions (like PYPY) are installed using pyenv and we cache
     # the compiled version.
     - PYENV_ROOT="$HOME/.pyenv"
@@ -38,7 +40,12 @@ cache:
     - $HOME/.cache/pip
     - $PYENV_ROOT
   before_cache:
+    # Show the current cache size and try to delete things which are no longer
+    # needed.
+    - du -h $HOME/.cache/pip
+    - du -h $PYENV_ROOT
     - rm -f $HOME/.cache/pip/log/debug.log
+    - pyenv uninstall -f $PREVIOUS_PYPY_VERSION
 
 
 matrix:

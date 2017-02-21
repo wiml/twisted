@@ -1,4 +1,4 @@
-Twisted 16.4.0
+Twisted 17.1.0
 ==============
 
 |pypi|
@@ -8,14 +8,9 @@ Twisted 16.4.0
 
 .. code::
 
-    <@glyph> wait
-    <@glyph> twisted.reviews is ... $24... dollars...
-    <@glyph> okay I did it
-    <@glyph> I think I might be falling off the wagon
-    * idnar flips the "days since glyph has bought a vanity domain name" counter back over to zero
+    <hawkowl> we have always been at war with 16.7
 
-
-For information on what's new in Twisted 16.4.0, see the `NEWS <NEWS>`_ file that comes with the distribution.
+For information on what's new in Twisted 17.1.0, see the `NEWS <NEWS>`_ file that comes with the distribution.
 
 
 What is this?
@@ -82,7 +77,7 @@ Some of these tests may fail if you:
 Copyright
 ---------
 
-All of the code in this distribution is Copyright (c) 2001-2016 Twisted Matrix Laboratories.
+All of the code in this distribution is Copyright (c) 2001-2017 Twisted Matrix Laboratories.
 
 Twisted is made available under the MIT license.
 The included `LICENSE <LICENSE>`_ file describes this in detail.

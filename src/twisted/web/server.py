@@ -525,7 +525,8 @@ class GzipEncoderFactory(object):
         """
         acceptHeaders = request.requestHeaders.getRawHeaders(
             'accept-encoding', [])
-        supported = ','.join(acceptHeaders).split(',')
+        supported = [encoding.strip()
+                     for encoding in ','.join(acceptHeaders).split(',')]
         if 'gzip' in supported:
             encoding = request.responseHeaders.getRawHeaders(
                 'content-encoding')

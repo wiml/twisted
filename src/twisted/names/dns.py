@@ -14,7 +14,7 @@ from __future__ import division, absolute_import
 __all__ = [
     'IEncodable', 'IRecord',
 
-    'A', 'A6', 'AAAA', 'AFSDB', 'CNAME', 'DNAME', 'HINFO',
+    'A', 'A6', 'AAAA', 'AFSDB', 'CNAME', 'DNAME', 'HINFO', 'KEY',
     'MAILA', 'MAILB', 'MB', 'MD', 'MF', 'MG', 'MINFO', 'MR', 'MX',
     'NAPTR', 'NS', 'NULL', 'OPT', 'PTR', 'RP', 'SIG', 'SOA', 'SPF',
     'SRV', 'SSHFP', 'TSIG', 'TXT', 'WKS',
@@ -28,7 +28,7 @@ __all__ = [
     'EBADMODE', 'EBADNAME', 'EBADALG', 'EBADTRUNC', 'EBADCOOKIE',
 
     'Record_A', 'Record_A6', 'Record_AAAA', 'Record_AFSDB', 'Record_CNAME',
-    'Record_DNAME', 'Record_HINFO', 'Record_MB', 'Record_MD',
+    'Record_DNAME', 'Record_HINFO', 'Record_KEY', 'Record_MB', 'Record_MD',
     'Record_MF', 'Record_MG', 'Record_MINFO', 'Record_MR', 'Record_MX', 'Record_NAPTR',
     'Record_NS', 'Record_NULL', 'Record_PTR', 'Record_RP', 'Record_SIG',
     'Record_SOA', 'Record_SPF', 'Record_SRV', 'Record_SSHFP', 'Record_TSIG',
@@ -118,6 +118,7 @@ PORT = 53
 (A, NS, MD, MF, CNAME, SOA, MB, MG, MR, NULL, WKS, PTR, HINFO, MINFO, MX, TXT,
  RP, AFSDB) = range(1, 19)
 SIG = 24
+KEY = 25
 AAAA = 28
 SRV = 33
 NAPTR = 35
@@ -125,6 +126,7 @@ A6 = 38
 DNAME = 39
 OPT = 41
 SSHFP = 44
+DNSKEY = 48
 SPF = 99
 
 # These record types do not exist in zones, but are transferred in
@@ -155,6 +157,7 @@ QUERY_TYPES = {
     # 19 through 23?  Eh, I'll get to 'em.
 
     SIG: 'SIG',
+    KEY: 'KEY',
     AAAA: 'AAAA',
     SRV: 'SRV',
     NAPTR: 'NAPTR',
@@ -162,6 +165,7 @@ QUERY_TYPES = {
     DNAME: 'DNAME',
     OPT: 'OPT',
     SSHFP: 'SSHFP',
+    DNSKEY: 'DNSKEY',
     SPF: 'SPF',
 
     TKEY: 'TKEY',
@@ -999,6 +1003,28 @@ class SimpleRecord(tputil.FancyStrMixin, tputil.FancyEqMixin):
     def __hash__(self):
         return hash(self.name)
 
+class _BitField (object):
+    __slots__ = ( 'var', 'shift', 'mask', 'invert' )
+    def __init__(self, var, shift, width=1, invert=False):
+        (self.var, self.shift, self.invert) = (var, shift, invert)
+        self.mask = (1 << width) - 1
+    def __get__(self, obj, type=None):
+        field = (getattr(obj, self.var) >> self.shift) & self.mask
+        if self.invert:
+            field = field ^ self.mask
+        if self.mask == 1:
+            return bool(field)
+        else:
+            return field
+    def __set__(self, obj, value):
+        masked = value & self.mask
+        if masked != value:
+            raise ValueError('Value is out of range for this field')
+        if self.invert:
+            masked = masked ^ self.mask
+        field = getattr(obj, self.var)
+        field = (field & ~(mask << self.shift)) | (masked << self.shift)
+        setattr(obj, self.var, field)
 
 # Kinds of RRs - oh my!
 class Record_NS(SimpleRecord):
@@ -1344,6 +1370,157 @@ class Record_WKS(tputil.FancyEqMixin, tputil.FancyStrMixin):
 
 
 
+@implementer(IEncodable)
+class Abstract_KEY(tputil.FancyEqMixin):
+    """
+    A record containing an asymmetric key, as used in DNSSEC.
+
+    @type flags: L{int}
+    @ivar flags: The flags field of the key, packed into an integer.
+                 The interpretation of this field differs between the
+                 KEY and DNSKEY RRs, although the RRs are otherwise
+                 identical.
+
+    @type protocol: L{int}
+    @ivar protocol: The key's protocol, e.g. 3 for DNSSEC
+
+    @type algorithm: L{int}
+    @ivar algorithm: The key's algorithm identifier
+
+    @type key: L{bytes}
+    @ivar key: The public-key data. The format of this data depends on the key's algorithm
+        and is described by a DNS-specific RFC.
+
+    @see: U{RFC 2535 <https://tools.ietf.org/html/rfc2535>} section 3,
+          U{RFC 4034 <https://tools.ietf.org/html/rfc4034>} section 2
+    """
+    compareAttributes = ('flags', 'protocol', 'algorithm', 'key', 'ttl')
+
+    PROTOCOL_DNSSEC = 3
+
+    def __init__(self, flags, protocol=PROTOCOL_DNSSEC, algorithm=0, key=b'', ttl=0):
+        self.flags = flags
+        self.protocol = protocol
+        if isinstance(algorithm, ValueConstant):
+            self.algorithm = algorithm.value
+        else:
+            self.algorithm = int(algorithm)
+        self.key = key
+        self.ttl = ttl
+
+    def encode(self, strio, compDict = None):
+        strio.write(struct.pack('!HBB',
+                                self.flags, self.protocol, self.algorithm))
+        strio.write(self.key)
+
+    def decode(self, strio, length = None):
+        r = struct.unpack('!HBB', readPrecisely(strio, 4))
+        (self.flags, self.protocol, self.algorithm) = r
+        self.key = readPrecisely(strio, length - 4)
+
+    def __hash__(self):
+        return hash((self.flags, self.protocol, self.algorithm, self.key))
+
+    def keyTag(self):
+        """
+        Computes the 16-bit id or tag of this key as defined in
+        U{RFC 2535 <https://tools.ietf.org/html/rfc2535>} Appendix C or
+        U{RFC 4034 <https://tools.ietf.org/html/rfc4034>} Appendix B.
+        """
+        if self.algorithm == 1:
+            return struct.unpack('>H', self.key[-3:-1])[0]
+        else:
+            rrdataio = BytesIO()
+            self.encode(rrdataio)
+            if rrdataio.tell() & 0x1 != 0:
+                rrdataio.write(b'\x00')
+            rrdata = rrdataio.getvalue()
+            accum = 0
+            for pos in range(0, len(rrdata), 2):
+                accum += struct.unpack('>H', rrdata[pos:pos+2])[0]
+            return ( accum + (accum >> 16) ) & 0xFFFF
+
+
+@implementer(IRecord)
+class Record_KEY(Abstract_KEY, tputil.FancyStrMixin):
+    fancybasename = "KEY"
+    showAttributes = ('flags', 'protocol', 'algorithm', 'key')
+    TYPE = KEY
+
+    NAMETYPE_USER = 0
+    NAMETYPE_ZONE = 1
+    NAMETYPE_ENTITY = 2
+
+    def __init__(self, authentication=False, confidentiality=False, signatory=0, nameType=NAMETYPE_ENTITY, **kwargs):
+        """
+        @type authentication: L{bool}
+        @param authentication: Whether this key should be used for authentication purposes.
+
+        @type confidentiality: L{bool}
+        @param confidentiality: Whether this key should be used for encryption.
+
+        @type signatory: L{int}
+        @param signatory: The interpretation of this field was never clear (see RFC 2535) and it has been deprecated (see RFC3445). It is typically zero.
+
+        @type nameType: L{int}
+        @param nameType: Indicates how this key's label corresponds to the thing it belongs to.
+
+        @type protocol: L{int}
+        @param protocol: The protocol with which this key should be used. RFC 3445 has deprecated any values other than 3 (DNSSEC) for this field.
+
+        @type algorithm: L{int} or L{DNSSEC_ALG} value
+        @param algorithm: The asymmetric algorithm this key belongs to.
+
+        @type key: L{bytes}
+        @param key: The key data itself, in a format determined by the key algorithm.
+        """
+        flags = kwargs.pop('flags', 0)
+        if not authentication:
+            flags |= 0x8000
+        if not confidentiality:
+            flags |= 0x4000
+        flags |= (nameType & 0x3) << 8
+        flags |= (signatory & 0xF)
+        Abstract_KEY.__init__(self, flags=flags, **kwargs)
+
+    nameType = _BitField('flags', 8, 2)
+    signatory = _BitField('flags', 0, 4)
+    authentication = _BitField('flags', 15, 1, invert=True)
+    confidentiality = _BitField('flags', 14, 1, invert=True)
+        
+@implementer(IRecord)
+class Record_DNSKEY(Abstract_KEY, tputil.FancyStrMixin):
+    fancybasename = "DNSKEY"
+    showAttributes = ('flags', 'protocol', 'algorithm', 'key')
+    TYPE = DNSKEY
+
+    def __init__(self, zoneKey=True, secureEntryPoint=False, **kwargs):
+        """
+        @type zoneKey: L{bool}
+        @param zoneKey: Whether this key is a DNS zone key.
+
+        @type secureEntryPoint: L{bool}
+        @param secureEntryPoint: Whether this key is a secure entry point; see RFC 3757.
+
+        @type protocol: L{int}
+        @param protocol: The protocol with which this key should be used. RFC 3445 has deprecated any values other than 3 (DNSSEC) for this field.
+
+        @type algorithm: L{int} or L{DNSSEC_ALG} value
+        @param algorithm: The asymmetric algorithm this key belongs to.
+
+        @type key: L{bytes}
+        @param key: The key data itself, in a format determined by the key algorithm.
+        """
+        flags = kwargs.pop('flags', 0)
+        if zoneKey:
+            flags |= 0x100
+        if secureEntryPoint:
+            flags |= 0x1
+        Abstract_KEY.__init__(self, flags=flags, **kwargs)
+
+    zoneKey = _BitField('flags', 7, 1)
+    secureEntryPoint = _BitField('flags', 0, 1)
+        
 @implementer(IEncodable, IRecord)
 class Record_SIG(tputil.FancyEqMixin, tputil.FancyStrMixin):
     """

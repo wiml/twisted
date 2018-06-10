@@ -16,8 +16,8 @@ __all__ = [
 
     'A', 'A6', 'AAAA', 'AFSDB', 'CNAME', 'DNAME', 'HINFO',
     'MAILA', 'MAILB', 'MB', 'MD', 'MF', 'MG', 'MINFO', 'MR', 'MX',
-    'NAPTR', 'NS', 'NULL', 'OPT', 'PTR', 'RP', 'SOA', 'SPF', 'SRV', 'TXT',
-    'SSHFP', 'TSIG', 'WKS',
+    'NAPTR', 'NS', 'NULL', 'OPT', 'PTR', 'RP', 'SIG', 'SOA', 'SPF',
+    'SRV', 'SSHFP', 'TSIG', 'TXT', 'WKS',
 
     'ANY', 'CH', 'CS', 'HS', 'IN',
 
@@ -25,14 +25,14 @@ __all__ = [
 
     'EFORMAT', 'ENAME', 'ENOTIMP', 'EREFUSED', 'ESERVER', 'EBADVERSION',
     'EBADSIG', 'EBADKEY', 'EBADTIME',
+    'EBADMODE', 'EBADNAME', 'EBADALG', 'EBADTRUNC', 'EBADCOOKIE',
 
     'Record_A', 'Record_A6', 'Record_AAAA', 'Record_AFSDB', 'Record_CNAME',
-    'Record_DNAME', 'Record_HINFO', 'Record_MB', 'Record_MD', 'Record_MF',
-    'Record_MG', 'Record_MINFO', 'Record_MR', 'Record_MX', 'Record_NAPTR',
-    'Record_NS', 'Record_NULL', 'Record_PTR', 'Record_RP', 'Record_SOA',
-    'Record_SPF', 'Record_SRV', 'Record_SSHFP', 'Record_TSIG', 'Record_TXT',
-    'Record_WKS',
-    'UnknownRecord',
+    'Record_DNAME', 'Record_HINFO', 'Record_MB', 'Record_MD',
+    'Record_MF', 'Record_MG', 'Record_MINFO', 'Record_MR', 'Record_MX', 'Record_NAPTR',
+    'Record_NS', 'Record_NULL', 'Record_PTR', 'Record_RP', 'Record_SIG',
+    'Record_SOA', 'Record_SPF', 'Record_SRV', 'Record_SSHFP', 'Record_TSIG',
+    'Record_TXT', 'Record_WKS', 'UnknownRecord',
 
     'QUERY_CLASSES', 'QUERY_TYPES', 'REV_CLASSES', 'REV_TYPES', 'EXT_QUERIES',
 
@@ -55,7 +55,7 @@ from io import BytesIO
 AF_INET6 = socket.AF_INET6
 
 from zope.interface import implementer, Interface, Attribute
-
+from constantly import Values, ValueConstant
 
 # Twisted imports
 from twisted.internet import protocol, defer
@@ -117,6 +117,7 @@ PORT = 53
 
 (A, NS, MD, MF, CNAME, SOA, MB, MG, MR, NULL, WKS, PTR, HINFO, MINFO, MX, TXT,
  RP, AFSDB) = range(1, 19)
+SIG = 24
 AAAA = 28
 SRV = 33
 NAPTR = 35
@@ -151,8 +152,9 @@ QUERY_TYPES = {
     RP: 'RP',
     AFSDB: 'AFSDB',
 
-    # 19 through 27?  Eh, I'll get to 'em.
+    # 19 through 23?  Eh, I'll get to 'em.
 
+    SIG: 'SIG',
     AAAA: 'AAAA',
     SRV: 'SRV',
     NAPTR: 'NAPTR',
@@ -204,10 +206,14 @@ OP_UPDATE = 5 # RFC 2136
 
 # Response Codes
 OK, EFORMAT, ESERVER, ENAME, ENOTIMP, EREFUSED = range(6)
+# https://tools.ietf.org/html/rfc2136
+EYXDOMAIN, EYXRRSET, ENXRRSET, ENOTAUTH, ENOTZONE = range(6, 11)
 # https://tools.ietf.org/html/rfc6891#section-9
 EBADVERSION = 16
 # RFC 2845
 EBADSIG, EBADKEY, EBADTIME = range(16, 19)
+# RFC 2930
+EBADMODE, EBADNAME, EBADALG, EBADTRUNC, EBADCOOKIE = range(19, 24)
 
 class IRecord(Interface):
     """
@@ -1339,6 +1345,91 @@ class Record_WKS(tputil.FancyEqMixin, tputil.FancyStrMixin):
 
 
 @implementer(IEncodable, IRecord)
+class Record_SIG(tputil.FancyEqMixin, tputil.FancyStrMixin):
+    """
+    A record containing an asymmetric signature, as described
+    in U{RFC 2535 <https://tools.ietf.org/html/rfc2535>} section 4
+    and U{RFC 2931 <https://tools.ietf.org/html/rfc2931>}.
+
+    @type typeCovered: L{int}
+    @ivar typeCovered: The type of RR covered by this signature, or 0 for transaction signatures.
+
+    @type algorithm: L{int} or L{DNSSEC_ALG} value
+    @ivar algorithm: The asymmetric algorithm used to generate this signature.
+    The same as the algorithm of the signing KEY RR.
+
+    @type labels: L{int}
+    @ivar labels: The count of labels covered by this signature (typically the same as the number of labels in the RR, but may be less, see RFC 2535 section 4.1.3.)
+
+    @type originalTTL: L{int}
+    @ivar originalTTL: The TTL of the records over which this signature was computed.
+
+    @type inception: L{int}
+    @ivar inception: The moment at which this signature becomes valid, expressed as seconds since the epoch.
+
+    @type expiration: L{int}
+    @ivar expiration: The moment at which this signature expires, expressed as seconds since the epoch.
+
+    @type keyTag: L{int}
+    @ivar keyTag: A (non-cryptographic) 16-bit hash of the signing public key.
+
+    @type signer: L{Name}
+    @ivar signer: The name of the signing public key.
+
+    @type signature: L{bytes}
+    @ivar signature: The signature itself. The format of this field depends on the key/signature algorithm.
+
+    """
+    fancybasename = "SIG"
+    compareAttributes = ('typeCovered', 'algorithm', 'labels', 'originalTTL',
+                         'inception', 'expiration', 'keyTag', 'signer', 'signature',
+                         'ttl')
+    showAttributes = compareAttributes
+
+    TYPE = SIG
+
+    def __init__(self, typeCovered=0, algorithm=0, labels=0, originalTTL=0, expiration=0, inception=0, keyTag=0, signer='', signature=None, ttl=0):
+        self.typeCovered = int(typeCovered)
+        if isinstance(algorithm, ValueConstant):
+            self.algorithm = algorithm.value
+        else:
+            self.algorithm = int(algorithm)
+        self.labels = int(labels)
+        self.originalTTL = int(originalTTL)
+        self.inception = int(inception)
+        self.expiration = int(expiration)
+        self.keyTag = int(keyTag)
+        self.signer = Name(signer)
+        self.signature = signature
+        self.ttl = ttl
+
+    def encode(self, strio, compDict = None, excludeSignature = False):
+        strio.write(struct.pack('!HBBLLLH',
+                                self.typeCovered, self.algorithm, self.labels,
+                                self.originalTTL,
+                                self.expiration, self.inception,
+                                self.keyTag))
+        self.signer.encode(strio, compDict)
+        if not excludeSignature:
+            strio.write(self.signature)
+
+    def decode(self, strio, length = None):
+        startoff = strio.tell()
+        r = struct.unpack('!HBBLLLH', readPrecisely(strio, 18))
+        (self.typeCovered, self.algorithm, self.labels,
+         self.originalTTL,
+         self.expiration, self.inception,
+         self.keyTag) = r
+        signer = Name()
+        signer.decode(strio)
+        self.signer = signer
+        self.signature = readPrecisely(strio, length - (strio.tell() - startoff))
+
+    def __hash__(self):
+        return hash((self.typeCovered, self.originalTTL, self.expiration, self.keyTag, self.signer, self.signature))
+
+
+@implementer(IEncodable, IRecord)
 class Record_AAAA(tputil.FancyEqMixin, tputil.FancyStrMixin):
     """
     An IPv6 host address.
@@ -2286,6 +2377,46 @@ def _compactRepr(obj, alwaysShow=None, flagNames=None, fieldNames=None,
 
     return ''.join(out)
 
+
+class DNSSEC_ALG (Values):
+    """
+    The possible algorithm values for a C{KEY} or C{SIG} record.
+
+    @cvar DELETE: Delete DS [RFC4034][RFC4398][RFC8078]
+    @cvar RSAMD5: RSA/MD5 [RFC3110][RFC4034]
+    @cvar DH: Diffie-Hellman [RFC2539]
+    @cvar DSA: DSA/SHA1 [RFC3755][RFC2536]
+    @cvar RSASHA1: RSA/SHA-1 [RFC3110][RFC4034]
+    @cvar DSA_NSEC3_SHA1: [RFC5155]
+    @cvar RSASHA1_NSEC3_SHA1: [RFC5155]
+    @cvar RSASHA256: RSA/SHA-256 [RFC5702]
+    @cvar RSASHA512: RSA/SHA-512 [RFC5702]
+    @cvar ECC_GOST: GOST R 34.10-2001 [RFC5933]
+    @cvar ECDSAP256SHA256: ECDSA Curve P-256 with SHA-256 [RFC6605]
+    @cvar ECDSAP384SHA384: ECDSA Curve P-384 with SHA-384 [RFC6605]
+    @cvar ED25519: Ed25519 [RFC8080]
+    @cvar ED448: Ed448 [RFC8080]
+
+    @see: U{RFC 4034 appendix A <https://tools.ietf.org/html/rfc4034#appendix-A>}
+          and the
+          U{IANA algorithm registry <https://www.iana.org/assignments/dns-sec-alg-numbers/dns-sec-alg-numbers.xhtml>}
+
+    """
+
+    DELETE             = ValueConstant(0)  # Delete DS
+    RSAMD5             = ValueConstant(1)  # RSA/MD5
+    DH                 = ValueConstant(2)  # Diffie-Hellman
+    DSA                = ValueConstant(3)  # DSA/SHA1
+    RSASHA1            = ValueConstant(5)  # RSA/SHA-1
+    DSA_NSEC3_SHA1     = ValueConstant(6)  # DSA-NSEC3-SHA1
+    RSASHA1_NSEC3_SHA1 = ValueConstant(7)  # RSASHA1-NSEC3-SHA1
+    RSASHA256          = ValueConstant(8)  # RSA/SHA-256
+    RSASHA512          = ValueConstant(10) # RSA/SHA-512
+    ECC_GOST           = ValueConstant(12) # GOST R 34.10-2001
+    ECDSAP256SHA256    = ValueConstant(13) # ECDSA Curve P-256 with SHA-256
+    ECDSAP384SHA384    = ValueConstant(14) # ECDSA Curve P-384 with SHA-384
+    ED25519            = ValueConstant(15) # Ed25519
+    ED448              = ValueConstant(16) # Ed448
 
 
 class Message(tputil.FancyEqMixin):

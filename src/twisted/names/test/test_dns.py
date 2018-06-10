@@ -623,6 +623,20 @@ class RoundtripDNSTests(unittest.TestCase):
                 preference=1, name=b'example.com'))
 
 
+    def test_SIG(self):
+        """
+        The byte stream written by L{dns.Record_SIG.encode} can be used by
+        L{dns.Record_SIG.decode} to reconstruct the state of the original
+        L{dns.Record_SIG} instance.
+        """
+        rr = dns.Record_SIG(typeCovered=0,
+                            algorithm=dns.DNSSEC_ALG.RSASHA1,
+                            labels=5, originalTTL=40,
+                            inception=1515546975, expiration=1515549975,
+                            keyTag=0xD36A, signer='somezone.example.com',
+                            signature=b'qwertyuiopzxcvbn')
+        self._recordRoundtripTest(rr)
+
     def test_TSIG(self):
         """
         The byte stream written by L{dns.Record_TSIG.encode} can be used by
@@ -2264,6 +2278,42 @@ class EqualityTests(ComparisonTestsMixin, unittest.TestCase):
             dns.Record_SPF('foo', 'bar', ttl=10),
             dns.Record_SPF('foo', 'bar', ttl=100))
 
+
+    def test_sig(self):
+        """
+        L{dns.Record_SIG} instances compare equal if and only if they have the
+        same data and ttl.
+        """
+        base_args = {
+            'typeCovered': dns.SSHFP,
+            'algorithm': dns.DNSSEC_ALG.RSASHA256,
+            'labels': 2,
+            'originalTTL': 0,
+            'inception': 1515546975,
+            'expiration': 1515549975,
+            'keyTag': 0x6A3D,
+            'signer': 'somezone.example.com',
+            'signature': b'qwertyuiopzxcvbn',
+            'ttl': 400
+        }
+        alt_args = {
+            'typeCovered': dns.SOA,
+            'algorithm': dns.DNSSEC_ALG.RSAMD5,
+            'labels': 3,
+            'originalTTL': 3600,
+            'inception': 1515546976,
+            'expiration': 1515549976,
+            'keyTag': 0xA3D,
+            'signer': 'otherzone.example.com',
+            'signature': b'zxcvbnm,asdfghjk',
+            'ttl': 40
+        }
+        for kw in base_args.keys():
+            altered = base_args.copy()
+            altered[kw] = alt_args[kw]
+            self._equalityTest(dns.Record_SIG(**altered),
+                               dns.Record_SIG(**altered),
+                               dns.Record_SIG(**base_args))
 
     def test_tsig(self):
         """

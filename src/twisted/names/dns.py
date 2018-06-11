@@ -2458,6 +2458,18 @@ class Message(tputil.FancyEqMixin):
 
 
     def encode(self, strio, signer = None):
+        """
+        Encode myself into protocol format, writing the encoded
+        bytes to C{strio.write()}.
+
+        If C{signer} is given, it is called with three arguments
+        (the message, the encoded header, and the encoded body)
+        and returns an L{RRHeader} instance or C{None}.
+
+        @param strio: An object writh a C{write()} method.
+        @param signer: A callable which computes a signature.
+        @return: C{None}
+        """
         compDict = {}
         body_tmp = BytesIO()
         for q in self.queries:
@@ -2488,6 +2500,8 @@ class Message(tputil.FancyEqMixin):
                              len(self.authority), len(self.additional))
 
         if signer is not None:
+            # TODO: Do we need to re-serialize our RRs in canonical
+            # form here?
             tsig = signer(self, header, body)
             if tsig is not None:
                 # Patch up the header to include the additional RR

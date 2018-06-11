@@ -2515,7 +2515,7 @@ class Message(tputil.FancyEqMixin):
         strio.write(body)
 
 
-    def decode(self, strio, length=None):
+    def decode(self, strio, length=None, verifier=None):
         self.maxSize = 0
         header = readPrecisely(strio, self.headerSize)
         r = struct.unpack(self.headerFmt, header)
@@ -2539,17 +2539,43 @@ class Message(tputil.FancyEqMixin):
                 return
             self.queries.append(q)
 
-        items = (
-            (self.answers, nans),
-            (self.authority, nns),
-            (self.additional, nadd))
+        bodyStart = strio.tell()
+        addoff = list()
+        self.parseRecords(self.answers,    nans, strio)
+        self.parseRecords(self.authority,  nns,  strio)
+        self.parseRecords(self.additional, nadd, strio, offsets=addoff)
 
-        for (l, n) in items:
-            self.parseRecords(l, n, strio)
+        if verifier is not None:
+            # TODO: Should we even be saving the as-sent bytes?
+            # Or are we required to re-serialize the RRs in "canonical"
+            # form? Test against BIND.
+            bodyEnd = strio.tell()
+            strio.seek(bodyStart)
+            body = strio.read(bodyEnd - bodyStart)
+            signatureRecord = None
+            if nadd >= 1:
+                lastrec = self.additional[-1].payload
+                if isinstance(lastrec, Record_TSIG):
+                    signatureRecord = self.additional[-1]
+                elif (isinstance(lastrec, Record_SIG) and
+                      lastrec.typeCovered == 0):
+                    signatureRecord = self.additional[-1]
+            if signatureRecord is None:
+                adjustedHeader = header
+                adjustedBodyLength = bodyEnd - bodyStart
+            else:
+                adjustedHeader = (
+                    header[:-2] +
+                    struct.pack('!H', nadd - 1)
+                )
+                adjustedBodyLength = addoff[-1] - bodyStart
+            verifier(self, adjustedHeader, body,
+                     adjustedBodyLength, signatureRecord)
 
 
-    def parseRecords(self, list, num, strio):
+    def parseRecords(self, list, num, strio, offsets=None):
         for i in range(num):
+            headerPosition = strio.tell()
             header = RRHeader(auth=self.auth)
             try:
                 header.decode(strio)
@@ -2564,6 +2590,8 @@ class Message(tputil.FancyEqMixin):
             except EOFError:
                 return
             list.append(header)
+            if offsets is not None:
+                offsets.append(headerPosition)
 
 
     # Create a mapping from record types to their corresponding Record_*

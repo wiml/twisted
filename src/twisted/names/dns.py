@@ -2457,7 +2457,7 @@ class Message(tputil.FancyEqMixin):
         self.queries.append(Query(name, type, cls))
 
 
-    def encode(self, strio):
+    def encode(self, strio, signer = None):
         compDict = {}
         body_tmp = BytesIO()
         for q in self.queries:
@@ -2483,9 +2483,21 @@ class Message(tputil.FancyEqMixin):
                   | ((self.checkingDisabled & 1) << 4)
                   | (self.rCode & 0xf ) )
 
-        strio.write(struct.pack(self.headerFmt, self.id, byte3, byte4,
-                                len(self.queries), len(self.answers),
-                                len(self.authority), len(self.additional)))
+        header = struct.pack(self.headerFmt, self.id, byte3, byte4,
+                             len(self.queries), len(self.answers),
+                             len(self.authority), len(self.additional))
+
+        if signer is not None:
+            tsig = signer(self, header, body)
+            if tsig is not None:
+                # Patch up the header to include the additional RR
+                header = (header[:-2] +
+                          struct.pack('!H', 1 + len(self.additional)))
+                # And append the signature RR
+                tsig.encode(body_tmp, compDict)
+                body = body_tmp.getvalue()
+
+        strio.write(header)
         strio.write(body)
 
 
@@ -2939,9 +2951,9 @@ class DNSMixin(object):
         return self._reactor.callLater(period, func, *args)
 
 
-    def _query(self, queries, timeout, id, writeMessage):
+    def _send_message(self, m, timeout, writeMessage):
         """
-        Send out a message with the given queries.
+        Send out a message and schedule a Deferred for its response.
 
         @type queries: L{list} of C{Query} instances
         @param queries: The queries to transmit
@@ -2960,8 +2972,6 @@ class DNSMixin(object):
             query, or errbacked with any errors that could happen (exceptions
             during writing of the query, timeout errors, ...).
         """
-        m = Message(id, recDes=1)
-        m.queries = queries
 
         try:
             writeMessage(m)
@@ -2969,8 +2979,8 @@ class DNSMixin(object):
             return defer.fail()
 
         resultDeferred = defer.Deferred()
-        cancelCall = self.callLater(timeout, self._clearFailed, resultDeferred, id)
-        self.liveMessages[id] = (resultDeferred, cancelCall)
+        cancelCall = self.callLater(timeout, self._clearFailed, resultDeferred, m.id)
+        self.liveMessages[m.id] = (resultDeferred, cancelCall)
 
         return resultDeferred
 
@@ -3086,8 +3096,31 @@ class DNSDatagramProtocol(DNSMixin, protocol.DatagramProtocol):
         def writeMessage(m):
             self.writeMessage(m, address)
 
-        return self._query(queries, timeout, id, writeMessage)
+        msg = Message(id, recDes=1)
+        msg.queries = queries
+        return self._send_message(msg, timeout, writeMessage)
 
+    def update(self, address, zone, zonetype=SOA, zoneclass=IN,
+               prerequisites=None,
+               updates=None,
+               additional=None,
+               id=None, timeout=None):
+
+        if id is None:
+            id = self.pickID()
+        else:
+            self.resends[id] = 1
+
+        def writeMessage(m):
+            self.writeMessage(m, address)
+
+        msg = Message(id, answer=0, opCode=OP_UPDATE)
+        msg.queries = [ Query(zone, type=zonetype, cls=zoneclass) ]
+        msg.answers = [] if not prerequisites else prerequisites[:]
+        msg.authority = updates[:]
+        msg.additional = [] if not additional else additional[:]
+
+        return self._send_message(msg, timeout, writeMessage)
 
 class DNSProtocol(DNSMixin, protocol.Protocol):
     """
@@ -3162,5 +3195,6 @@ class DNSProtocol(DNSMixin, protocol.Protocol):
 
         @rtype: C{Deferred}
         """
-        id = self.pickID()
-        return self._query(queries, timeout, id, self.writeMessage)
+        msg = Message(self.pickID(), recDes=1)
+        msg.queries = queries
+        return self._send_message(msg, timeout, self.writeMessage)

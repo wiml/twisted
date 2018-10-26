@@ -3081,7 +3081,8 @@ class ServerStringTests(unittest.TestCase):
     def test_tcpUnicode(self):
         """
         When passed a TCP strports description in unicdoe form,
-        L{endpoints.serverFromString} returns the correct L{TCP4ServerEndpoint}.
+        L{endpoints.serverFromString} returns the
+        correct L{TCP4ServerEndpoint}.
         """
         reactor = object()
         server = endpoints.serverFromString(
@@ -3115,7 +3116,8 @@ class ServerStringTests(unittest.TestCase):
     def test_sslUnicode(self):
         """
         When passed a strports description in unicode form,
-        L{endpoints.serverFromString} returns the correct L{SSL4ServerEndpoint}
+        L{endpoints.serverFromString} returns the
+        correct L{SSL4ServerEndpoint}.
         """
         reactor = object()
         server = endpoints.serverFromString(
@@ -3280,7 +3282,8 @@ class ServerStringTests(unittest.TestCase):
     def test_unixUnicode(self):
         """
         When passed a UNIX strports description in unicode form,
-        L{endpoints.serverFromString} returns the correct L{UNIXServerEndpoint}
+        L{endpoints.serverFromString} returns the
+        correct L{UNIXServerEndpoint}.
         """
 
         reactor = object()
@@ -3291,7 +3294,7 @@ class ServerStringTests(unittest.TestCase):
         self.assertEqual(server._address, u"/var/foo/jalepe\xf1o")
 
 
-    def test_unicdodeWithNonUTFLocale(self):
+    def test_unicodeWithNonUTFLocale(self):
         """
         When passed a unicode strports description in a non-UTF locale, ensure
         that L{endpoints.serverFromString} still returns the correct endpoints.

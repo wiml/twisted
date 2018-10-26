@@ -61,7 +61,7 @@ def main(reactor):
     options = ssl.optionsForClientTLS(
         hostname=TARGET_HOST,
         trustRoot=serverCertificate,
-        # `acceptableProtocols` is the targetted option for this example.
+        # `acceptableProtocols` is the targeted option for this example.
         acceptableProtocols=ACCEPTABLE_PROTOCOLS,
     )
 
@@ -81,7 +81,7 @@ def main(reactor):
             # the TLS handshake is over. This is generally *not* in the call to
             # connectionMade, but instead only when we've received some data
             # back.
-            print('Next protocol is: %s' % self.transport.negotiatedProtocol)
+            print('Next protocol is: {}'.format(self.transport.negotiatedProtocol))
             self.transport.loseConnection()
 
             # If this is the first data write, we can tell the reactor we're
@@ -94,7 +94,7 @@ def main(reactor):
             # If we haven't received any data, an error occurred. Otherwise,
             # we lost the connection on purpose.
             if self.complete is not None:
-                print(("Connection lost due to error %s" % (reason,)))
+                print("Connection lost due to error {}".format(reason))
                 self.complete.callback(None)
             else:
                 print("Connection closed cleanly")

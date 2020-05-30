@@ -409,6 +409,18 @@ class CertBase:
         return self._copyName('subject')
 
 
+    def describeSubject(self) -> str:
+        """
+        Retrieve a short string indicating the subject of this certificate.
+
+        Typically, this will be the commonName of the subject DN.
+
+        @return: Certificate subject.
+        @rtype: L{unicode}
+        """
+        return _describeDN(self.original.get_subject())
+
+
     def __conform__(self, interface):
         """
         Convert this L{CertBase} into a provider of the given interface.
@@ -445,14 +457,38 @@ def _handleattrhelper(Class, transport, methodName):
 
 
 
+def _describeDN(dn: crypto.X509Name) -> str:
+    """
+    (private) Helper for brief descriptions of DNs.
+    When possible we return the commonName attribute; otherwise,
+    we try to return something else representative.
+
+    @param dn: a name to describe or C{None}
+    @type dn: L{OpenSSL.crypto.X509Name}
+
+    @return: A description of the name
+    @rtype: L{unicode}
+    """
+
+    if dn is None:
+        return 'none'
+
+    commonName = dn.commonName
+    if commonName:
+        return commonName
+
+    return repr(dn)
+
+
+
 class Certificate(CertBase):
     """
     An x509 certificate.
     """
     def __repr__(self):
         return '<%s Subject=%s Issuer=%s>' % (self.__class__.__name__,
-                                              self.getSubject().commonName,
-                                              self.getIssuer().commonName)
+                                              self.describeSubject(),
+                                              self.describeIssuer())
 
 
     def __eq__(self, other):
@@ -592,6 +628,18 @@ class Certificate(CertBase):
         return self._copyName('issuer')
 
 
+    def describeIssuer(self) -> str:
+        """
+        Retrieve a short string indicating the issuer of this certificate.
+
+        Typically, this will be the commonName of the issuer DN.
+
+        @return: Certificate issuer.
+        @rtype: L{unicode}
+        """
+        return _describeDN(self.original.get_issuer())
+
+
     def options(self, *authorities):
         raise NotImplementedError('Possible, but doubtful we need this yet')
 
@@ -607,10 +655,10 @@ class CertificateRequest(CertBase):
     @classmethod
     def load(Class, requestData, requestFormat=crypto.FILETYPE_ASN1):
         req = crypto.load_certificate_request(requestFormat, requestData)
-        dn = DistinguishedName()
-        dn._copyFrom(req.get_subject())
         if not req.verify(req.get_pubkey()):
-            raise VerifyError("Can't verify that request for %r is self-signed." % (dn,))
+            dn = _describeDN(req.get_subject())
+            raise VerifyError(
+                "Can't verify that request for %r is self-signed." % (dn,))
         return Class(req)
 
 
